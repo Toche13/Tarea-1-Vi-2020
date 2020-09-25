@@ -1,0 +1,125 @@
+---
+title: "Municiios más pobres 2015"
+author: "Nelly Toche"
+date: "24/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# -**Conociendo la pobreza del país**-
+##Desigualdad
+
+<p> En el país hay grandes desigualdades, históricamente la pobreza ha estado focalizada al sur del país y continúa de la misma manera, esto se demuestra a través de la siguiente base de datos abiertos donde exploraremos los trece municipios más pobres de toda la república mexicana </p>
+
+<b style = 'color:red;'>**Gráfica**</b>
+
+```{r,echo= FALSE, warning=FALSE, cache=FALSE, error=FALSE}
+
+library(tidyverse)# Manejo de bases de datos
+library(sf)#Graficas de mapas
+library(leaflet) # Visualización interactiva (mapas)
+library(plotly)#Gráficas interactivas
+library(pacman)# Abrir bases de datos geograficas
+p_load(tidyverse, sf, ggplot2, viridis)
+```
+```{r,echo= FALSE, warning=FALSE, cache=FALSE, error=FALSE}
+
+pobreza <- read_csv("../01_datos/pobrezaExtrema.csv", 
+                           col_types = cols(Valor = col_number())) 
+edo <- st_read("https://raw.githubusercontent.com/JuveCampos/MexicoSinIslas/master/Sin_islas.geojson", quiet = TRUE) %>% filter(ENTIDAD == "OAXACA" | ENTIDAD == "CHIAPAS" |ENTIDAD == "GUERRERO" ) 
+
+Municipios <- st_read("https://raw.githubusercontent.com/JuveCampos/Shapes_Resiliencia_CDMX_CIDE/master/geojsons/Division%20Politica/mpios2.geojson", quiet = TRUE)%>% filter(NOM_ENT == "Oaxaca" | NOM_ENT == "Chiapas" |NOM_ENT == "Guerrero" ) 
+
+edos <- st_read("https://raw.githubusercontent.com/JuveCampos/MexicoSinIslas/master/Sin_islas.geojson", quiet = TRUE)
+
+```
+```{r,echo= FALSE, warning=FALSE, cache=FALSE, error=FALSE}
+pobreza %>% 
+  ggplot(aes(x= Municipio, y= Valor, fill = Municipio, alpha=.03, text = paste0("<b>Entidad: </b>", Entidad, "<br>", "<b>Valor: </b>", Valor, "<br>")))+
+  geom_col()+
+  coord_flip()+
+  labs(title = "Los municipios más pobres del 2015", x = "Valores", y = "Municipios", caption = "Fuente: Datos abiertos") +
+  theme(legend.position = "none")
+```
+<p> Luego de conocer la lista de municipios probablemente no nos dice mucho si no estamos familiarizados con los nombres, pero de entrada podemos observar que están muy parejas todas estas regiones del país, comparten razgos y condiciones. Para lograr mayor entendimiento pasemos a la siguiente gráfica </p>
+```{r,echo= FALSE, warning=FALSE, cache=FALSE, error=FALSE}
+ggplotly(tooltip = "text")  %>% 
+  config(displayModeBar = F)
+```
+<p> Con esta gráfica interactiva ahora sí nos podemos dar cuenta del porcentaje de pobreza y en qué estados se encuentra cada municipio, básicamente los trece municipios más pobres se encuentran en Oaxaca principalmente, seguido por Guerrero y Chiapas. Llama la atención SAntos Reyes Yucuná, donde el porcentaje de pobreza es de 97.46%, prácticamente toda la comunidad tiene condiciones muy desfavorables </p>
+
+<p> **Nota** Esto debería ser un llamado urgente a las autoridades para generar políticas enfocadas específicamente para estas comunidades</p>
+
+<b style = 'color:red;'>**Mapa**</b>
+
+<p> Ahora observemos a través de un mapa la aserción del principio, donde dijimos que la pobreza está focalizada en el sur del país</p>
+
+```{r,echo= FALSE, warning=FALSE, cache=FALSE, error=FALSE}
+maxima_pobreza<-pobreza %>% 
+  mutate(nivel_pobreza = case_when( Valor < 78 ~ "menor",between(Valor,78,82) ~ "media",
+                                    Valor > 83 ~ "mayor"))
+
+mapa <- merge(x = Municipios, 
+              y = maxima_pobreza,
+              by.x = "CVE_MUN",
+              by.y = "CVE_MUN")
+
+mapa %>% 
+  ggplot(aes(fill = Valor)) +
+  geom_sf(data = edos, fill = NA, color = "purple")+
+  geom_sf(data = Municipios, fill = "white", color = "pink")+
+  geom_sf()+
+  theme(legend.position = "bottom") + 
+  theme(axis.text = element_blank(), 
+        panel.grid = element_blank(), 
+        panel.border = element_blank(), 
+        panel.background = element_rect(),
+        axis.ticks = element_blank())+
+   labs(title = "Los Municios más pobres de México 2015", 
+       subitle = "Oaxaca, Guerrero y Chiapas siguen a la cabeza", caption = "Fuente: datos abiertos")
+```
+<p> Con este último mapa interactivo vamos a poder observar los datos con mayor detalle y entedenr que estos municipios han quedado aislados de cualquier política pública que el país ha generado contra la pobreza</p>
+
+```{r,echo= FALSE, warning=FALSE, cache=FALSE, error=FALSE}
+st_geometry(mapa)
+
+paleta <- colorFactor(c("#439e3b", "#001885", "#d02a21"), edos$Municipios)
+
+leaflet(mapa) %>%
+  addTiles() %>%
+  addPolygons(highlightOptions = highlightOptions(color = "white"),           color = "black", 
+              weight = 0.5, 
+              smoothFactor = 0.5, 
+              opacity = 0, 
+              fillOpacity = 0.5,fillColor = paleta(edos$Municipios)) %>% 
+  addScaleBar(position = "bottomright") %>%   
+  addLegend(position = "bottomleft", 
+            pal = paleta, 
+            values = edos$Municipio, 
+            title = "Los Municipios más pobres de México(2015)<br> Las políticas públicas destinadas a esta<br>región siguen ausentes", 
+            labFormat = labelFormat(prefix = "")) %>%
+  addPolygons(data = edos, fill = NA, color = "green", opacity = 0.3) %>% 
+  addPolygons(data = Municipios, fill = "white", color = "red", opacity = 0,popup = paste0("<b>Entidad: </b>", pobreza$Municipio, "<br>", "<b>Valor: </b>", pobreza$Valor, "<br>"))
+```
+<p> Que la siguiente tabla nos ayude a tener presente estos nombres de municipios y nos lleve a la acción</p>
+
+
+  | Municipios        | Estado      | 
+  |-------------------|-------------|
+  |Santos Reyes Yucuná|Oaxaca       | 
+  |Santiago Nuyoó     |Oaxaca       | 
+  |Santiago Ixtayutla |Guerrero     | 
+  |Santiago Amoltepec |Oaxaca       | 
+  |Santa María Zaniza |Guerrero     |
+  |San Simón Zahuatlán|Chiapas      |
+  |San Martín Peras   |Oaxaca       |
+  |San Juan Cancuc    |Chiapas      |
+  |San Bartolomé      |Chiapas      |
+  |Huautepec          |Oaxaca       |
+  |Colcoyán de Flores |Oaxaca       |
+  |Cochoapa el Grande |Guerrero     |
+  |Chalchihuitán      |Chiapas      |
+
